@@ -24,13 +24,10 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 import anthropic
-from notion_client import Client as NotionClient
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
 ANTHROPIC_API_KEY   = os.environ["ANTHROPIC_API_KEY"]
-NOTION_API_KEY      = os.environ["NOTION_API_KEY"]
-NOTION_DATABASE_ID  = os.environ["NOTION_DATABASE_ID"]
 EMAIL_FROM          = os.environ["EMAIL_FROM"]
 EMAIL_TO            = os.environ["EMAIL_TO"]          # "a@x.com,b@x.com"
 EMAIL_PASSWORD      = os.environ["EMAIL_PASSWORD"]    # Gmail App Password
@@ -233,43 +230,7 @@ def run_claude(prompt: str, model: str = PRIMARY_MODEL) -> str:
 
 # ── Notion ────────────────────────────────────────────────────────────────────
 
-def save_to_notion(digest: str, date_range: str, is_alert: bool = False) -> str:
-    notion = NotionClient(auth=NOTION_API_KEY)
 
-    title = f"{'⚡ ALERT' if is_alert else 'Sentinel Digest'} — {date_range}"
-
-    # Parse top signal (first paragraph after "Top Signal This Week:")
-    top_signal = ""
-    if "Top Signal This Week:" in digest:
-        parts = digest.split("Top Signal This Week:")
-        if len(parts) > 1:
-            top_signal = parts[1].split("\n\n")[0].strip()
-
-    page = notion.pages.create(
-        parent={"database_id": NOTION_DATABASE_ID},
-        properties={
-            "title": {"title": [{"text": {"content": title}}]},
-            "Top Signal": {"rich_text": [{"text": {"content": top_signal[:2000]}}]},
-            "Status": {"select": {"name": "Published"}},
-        },
-        children=[
-            {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{"type": "text", "text": {"content": digest[:2000]}}]
-                },
-            },
-            {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{"type": "text", "text": {"content": digest[2000:4000]}}]
-                },
-            } if len(digest) > 2000 else None,
-        ],
-    )
-    return page["url"]
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 
@@ -323,21 +284,12 @@ def main():
         print(f"🔭 Running weekly digest for {date_range}...")
         digest = run_claude(weekly_prompt(date_range), model=PRIMARY_MODEL)
 
-        print("💾 Saving to Notion...")
-        notion_url = save_to_notion(digest, date_range)
-
-        # Truncate email to ~4000 chars, link to Notion for full version
-        email_body = digest[:4000]
-        if len(digest) > 4000:
-            email_body += f"\n\n[Digest truncated — full version in Notion]"
-
-        print("📧 Sending email...")
+ print("📧 Sending email...")
         send_email(
             subject=f"🔭 Sentinel × Xavor — Weekly Digest {date_range}",
-            body=email_body,
-            notion_url=notion_url,
+            body=digest,
         )
-        print(f"✅ Done. Notion: {notion_url}")
+        print("✅ Done.")
 
     elif args.mode == "midweek":
         print(f"⚡ Running mid-week scan for {date_range}...")
@@ -347,14 +299,10 @@ def main():
             print("🟢 No high-priority signals found. No email sent.")
             sys.exit(0)
 
-        print("💾 Saving alert to Notion...")
-        notion_url = save_to_notion(result, date_range, is_alert=True)
-
-        print("📧 Sending alert email...")
+print("📧 Sending alert email...")
         send_email(
             subject=f"⚡ Sentinel Alert — {date_range}",
             body=result,
-            notion_url=notion_url,
         )
         print("✅ Alert sent.")
 
