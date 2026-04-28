@@ -1,25 +1,22 @@
 """
 Sentinel — Xavor Strategic Intelligence Agent
-Replacement for OpenClaw. Runs via GitHub Actions cron.
+Runs via GitHub Actions cron. Delivers digest by email.
 
 Requirements:
-    pip install anthropic notion-client
+    pip install anthropic
 
-Environment variables (set in GitHub Actions secrets or .env):
+Environment variables (set in GitHub Actions secrets):
     ANTHROPIC_API_KEY
-    NOTION_API_KEY
-    NOTION_DATABASE_ID
     EMAIL_FROM        (Gmail address)
     EMAIL_TO          (recipient address, comma-separated for multiple)
-    EMAIL_PASSWORD    (Gmail App Password — NOT your normal Gmail password)
+    EMAIL_PASSWORD    (Gmail App Password)
 """
 
 import os
 import sys
-import json
-import smtplib
 import argparse
-from datetime import datetime, timedelta
+import smtplib
+from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -27,13 +24,12 @@ import anthropic
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-ANTHROPIC_API_KEY   = os.environ["ANTHROPIC_API_KEY"]
-EMAIL_FROM          = os.environ["EMAIL_FROM"]
-EMAIL_TO            = os.environ["EMAIL_TO"]          # "a@x.com,b@x.com"
-EMAIL_PASSWORD      = os.environ["EMAIL_PASSWORD"]    # Gmail App Password
+ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+EMAIL_FROM        = os.environ["EMAIL_FROM"]
+EMAIL_TO          = os.environ["EMAIL_TO"]
+EMAIL_PASSWORD    = os.environ["EMAIL_PASSWORD"]
 
-PRIMARY_MODEL   = "claude-sonnet-4-5-20250929"
-HEARTBEAT_MODEL = "claude-haiku-4-5-20251001"
+PRIMARY_MODEL = "claude-sonnet-4-5-20250929"
 
 # ── Soul (system prompt) ──────────────────────────────────────────────────────
 
@@ -80,9 +76,9 @@ companies modernizing legacy PLM/ERP/CRM; manufacturers adopting AI/robotics
 ## Your Role
 
 You are a strategic analyst who evaluates every market signal through:
-1. Relevance to Xavor's services — does this create demand or threat?
-2. Content opportunity — can Xavor's marketing team act on this?
-3. Strategic signal — should Xavor invest, hire, partner, or pivot?
+1. Relevance to Xavor's services - does this create demand or threat?
+2. Content opportunity - can Xavor's marketing team act on this?
+3. Strategic signal - should Xavor invest, hire, partner, or pivot?
 
 Your tone is sharp, opinionated, and business-focused. Write for busy
 executives who need to act, not just be informed.
@@ -103,11 +99,11 @@ ServiceNow AI, Oracle & Aras PLM trends, Propel PLM, enterprise integration.
 
 ## Signal Scoring (score each 1-5)
 
-1. Xavor Relevance — direct demand impact or competitive threat?
-2. Content Potential — blog, LinkedIn, webinar, whitepaper angle?
-3. Maturity — production-ready vs still research?
-4. Market Impact — how much does this shift the market?
-5. Confidence — confirmed vs rumored?
+1. Xavor Relevance - direct demand impact or competitive threat?
+2. Content Potential - blog, LinkedIn, webinar, whitepaper angle?
+3. Maturity - production-ready vs still research?
+4. Market Impact - how much does this shift the market?
+5. Confidence - confirmed vs rumored?
 
 Include only signals scoring 3+ on Xavor Relevance OR Content Potential,
 PLUS 3+ on at least one other dimension.
@@ -118,42 +114,42 @@ Structure every digest EXACTLY like this:
 
 ---
 
-### 🔭 SENTINEL × XAVOR — WEEKLY DIGEST [DATE RANGE]
+### SENTINEL x XAVOR - WEEKLY DIGEST [DATE RANGE]
 
-**⚡ Top Signal This Week:**
+**TOP SIGNAL THIS WEEK:**
 [One paragraph: what happened, why it matters to Xavor, what action to take]
 
 ---
 
-**📦 NEW PRODUCTS & LAUNCHES**
+**NEW PRODUCTS & LAUNCHES**
 - **[Product/Company]**: What it is, what's new, pricing if known
-  *Xavor angle*: How this connects to Xavor's services or clients
-  *Content idea*: Suggested blog/LinkedIn angle
-  *Source*: [link]
-  *Signal strength*: 🔴 High / 🟡 Medium / 🟢 Low
+  Xavor angle: How this connects to Xavor's services or clients
+  Content idea: Suggested blog/LinkedIn angle
+  Source: [link]
+  Signal strength: High / Medium / Low
 
-**📄 RESEARCH & BREAKTHROUGHS**
+**RESEARCH & BREAKTHROUGHS**
 [Same format. Only papers with enterprise value within 12-18 months.]
 
-**🤝 PARTNERSHIPS & DEALS**
+**PARTNERSHIPS & DEALS**
 [Same format. Flag Salesforce, ServiceNow, Oracle, Aras, Propel ecosystem.]
 
-**💰 FUNDING & M&A**
-[Same format. Connect dots — what consolidation affects Xavor's market?]
+**FUNDING & M&A**
+[Same format. Connect dots - what consolidation affects Xavor's market?]
 
-**🎯 XAVOR CONTENT CALENDAR IDEAS**
+**XAVOR CONTENT CALENDAR IDEAS**
 For each of 3-5 content pieces:
 - Title suggestion
 - Format (blog / LinkedIn / webinar / whitepaper / case study)
 - Key angle and why it's timely
 - Which Xavor service line it promotes
 
-**📊 QUARTERLY STRATEGY SIGNALS**
+**QUARTERLY STRATEGY SIGNALS**
 3-5 observations framed as:
 "Xavor should consider..." / "This validates Xavor's bet on..." /
 "Risk: Xavor may need to respond to..."
 
-**🔇 NOISE FILTER**
+**NOISE FILTER**
 2-3 things that got attention but are overhyped or irrelevant to Xavor's ICP.
 
 ---
@@ -161,7 +157,7 @@ For each of 3-5 content pieces:
 ## Rules
 
 - Never fabricate sources. If you can't find a link, say so.
-- Flag uncertainty: "[unverified]" or "[rumored]"
+- Flag uncertainty: [unverified] or [rumored]
 - If a week is genuinely quiet, say so. Don't pad the digest.
 - Always think: "How does this help Xavor win deals, create better content,
   or make smarter strategic bets?"
@@ -170,34 +166,32 @@ For each of 3-5 content pieces:
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
 
-def weekly_prompt(date_range: str) -> str:
+def weekly_prompt(date_range):
     return f"""
 Run Sentinel's full weekly research cycle for {date_range}.
 
-Research phase — use web search to cover:
-1. Twitter/X keyword search: "enterprise AI", "physical AI", "AI agents enterprise",
+Research phase - use web search to cover:
+1. Keywords: "enterprise AI", "physical AI", "AI agents enterprise",
    "PLM AI", "Salesforce AI", "ServiceNow AI", "edge AI", "embodied AI",
-   "AI manufacturing", "agentic AI enterprise" — past 7 days
-2. Reddit: r/MachineLearning, r/artificial, r/robotics, r/LocalLLaMA,
-   r/salesforce — top posts this week
-3. Web searches:
+   "AI manufacturing", "agentic AI enterprise" - past 7 days
+2. Web searches:
    - "enterprise AI news this week"
    - "physical AI robotics news this week"
    - "Salesforce AI news this week"
    - "ServiceNow AI news this week"
    - "agentic AI enterprise this week"
-   - "PLM AI modernization 2025"
+   - "PLM AI modernization 2026"
    - "edge AI IoT news this week"
-4. Company blogs: Salesforce, ServiceNow, Oracle, Aras, Propel, NVIDIA,
+3. Company blogs: Salesforce, ServiceNow, Oracle, Aras, Propel, NVIDIA,
    Anthropic, OpenAI, Google DeepMind
-5. Industry press: TechCrunch, VentureBeat, The Robot Report,
+4. Industry press: TechCrunch, VentureBeat, The Robot Report,
    Robotics Business Review, IEEE Spectrum
 
 Score every signal using the 5-dimension framework. Filter below threshold.
 Produce the full detailed digest in the exact output format specified.
 """
 
-def midweek_prompt(date_range: str) -> str:
+def midweek_prompt(date_range):
     return f"""
 Run Sentinel's mid-week breaking news scan for {date_range}.
 
@@ -208,14 +202,14 @@ Market Impact):
 - Major partnership announcements in Xavor's ecosystem
 
 If you find something truly significant, write a short alert:
-"⚡ SENTINEL ALERT: [headline]. Xavor angle: [one sentence]. Full analysis in Sunday digest."
+"SENTINEL ALERT: [headline]. Xavor angle: [one sentence]. Full analysis in Sunday digest."
 
 If nothing qualifies, respond with exactly: NO_ALERT
 """
 
 # ── Claude call ───────────────────────────────────────────────────────────────
 
-def run_claude(prompt: str, model: str = PRIMARY_MODEL) -> str:
+def run_claude(prompt, model=PRIMARY_MODEL):
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     response = client.messages.create(
         model=model,
@@ -224,17 +218,12 @@ def run_claude(prompt: str, model: str = PRIMARY_MODEL) -> str:
         tools=[{"type": "web_search_20250305", "name": "web_search"}],
         messages=[{"role": "user", "content": prompt}],
     )
-    # Collect all text blocks from the response
     text_parts = [block.text for block in response.content if hasattr(block, "text")]
     return "\n".join(text_parts).strip()
 
-# ── Notion ────────────────────────────────────────────────────────────────────
-
-
-
 # ── Email ─────────────────────────────────────────────────────────────────────
 
-def send_email(subject: str, body: str, notion_url: str = None):
+def send_email(subject, body):
     recipients = [r.strip() for r in EMAIL_TO.split(",")]
 
     msg = MIMEMultipart("alternative")
@@ -242,33 +231,25 @@ def send_email(subject: str, body: str, notion_url: str = None):
     msg["From"]    = EMAIL_FROM
     msg["To"]      = ", ".join(recipients)
 
-    # Plain text version
-    plain = body
-    if notion_url:
-        plain += f"\n\n📚 Full archive: {notion_url}"
-
-    # HTML version (simple formatting)
-    html_body = body.replace("\n", "<br>")
     html = f"""
     <html><body style="font-family: sans-serif; max-width: 700px; margin: auto; padding: 20px;">
-    <pre style="white-space: pre-wrap; font-family: sans-serif; font-size: 14px;">{html_body}</pre>
-    {"<p><a href='" + notion_url + "'>📚 Full archive in Notion →</a></p>" if notion_url else ""}
+    <pre style="white-space: pre-wrap; font-family: sans-serif; font-size: 14px;">{body}</pre>
     </body></html>
     """
 
-    msg.attach(MIMEText(plain, "plain"))
+    msg.attach(MIMEText(body, "plain"))
     msg.attach(MIMEText(html, "html"))
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(EMAIL_FROM, EMAIL_PASSWORD)
         server.sendmail(EMAIL_FROM, recipients, msg.as_string())
 
-    print(f"✅ Email sent to: {', '.join(recipients)}")
+    print(f"Email sent to: {', '.join(recipients)}")
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Sentinel — Xavor Research Agent")
+    parser = argparse.ArgumentParser(description="Sentinel - Xavor Research Agent")
     parser.add_argument(
         "mode",
         choices=["weekly", "midweek"],
@@ -276,35 +257,32 @@ def main():
     )
     args = parser.parse_args()
 
-    today     = datetime.utcnow()
-    week_ago  = today - timedelta(days=7)
-    date_range = f"{week_ago.strftime('%b %d')} – {today.strftime('%b %d, %Y')}"
+    today      = datetime.now(timezone.utc)
+    week_ago   = today - timedelta(days=7)
+    date_range = f"{week_ago.strftime('%b %d')} - {today.strftime('%b %d, %Y')}"
 
     if args.mode == "weekly":
-        print(f"🔭 Running weekly digest for {date_range}...")
-        digest = run_claude(weekly_prompt(date_range), model=PRIMARY_MODEL)
-
- print("📧 Sending email...")
+        print(f"Running weekly digest for {date_range}...")
+        digest = run_claude(weekly_prompt(date_range))
+        print("Sending email...")
         send_email(
-            subject=f"🔭 Sentinel × Xavor — Weekly Digest {date_range}",
+            subject=f"Sentinel x Xavor - Weekly Digest {date_range}",
             body=digest,
         )
-        print("✅ Done.")
+        print("Done.")
 
     elif args.mode == "midweek":
-        print(f"⚡ Running mid-week scan for {date_range}...")
-        result = run_claude(midweek_prompt(date_range), model=PRIMARY_MODEL)
-
+        print(f"Running mid-week scan for {date_range}...")
+        result = run_claude(midweek_prompt(date_range))
         if result.strip() == "NO_ALERT":
-            print("🟢 No high-priority signals found. No email sent.")
+            print("No high-priority signals found. No email sent.")
             sys.exit(0)
-
-print("📧 Sending alert email...")
+        print("Sending alert email...")
         send_email(
-            subject=f"⚡ Sentinel Alert — {date_range}",
+            subject=f"Sentinel Alert - {date_range}",
             body=result,
         )
-        print("✅ Alert sent.")
+        print("Alert sent.")
 
 if __name__ == "__main__":
     main()
