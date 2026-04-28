@@ -35,7 +35,7 @@ EMAIL_FROM          = os.environ["EMAIL_FROM"]
 EMAIL_TO            = os.environ["EMAIL_TO"]          # "a@x.com,b@x.com"
 EMAIL_PASSWORD      = os.environ["EMAIL_PASSWORD"]    # Gmail App Password
 
-PRIMARY_MODEL   = "claude-sonnet-4-20250514"
+PRIMARY_MODEL   = "claude-sonnet-4-5-20250929"
 HEARTBEAT_MODEL = "claude-haiku-4-5-20251001"
 
 # ── Soul (system prompt) ──────────────────────────────────────────────────────
