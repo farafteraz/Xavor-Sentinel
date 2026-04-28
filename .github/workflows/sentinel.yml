@@ -1,0 +1,61 @@
+name: Sentinel — Xavor Research Agent
+
+on:
+  schedule:
+    # Sunday 8:00 PM PKT = Sunday 15:00 UTC (PKT is UTC+5)
+    - cron: "0 15 * * 0"
+    # Wednesday 12:00 PM PKT = Wednesday 07:00 UTC
+    - cron: "0 7 * * 3"
+
+  # Allows manual trigger from GitHub Actions UI (useful for testing)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Run mode"
+        required: true
+        default: "weekly"
+        type: choice
+        options:
+          - weekly
+          - midweek
+
+jobs:
+  sentinel:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install anthropic notion-client
+
+      - name: Determine run mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ inputs.mode }}" >> $GITHUB_OUTPUT
+          else
+            # Detect from schedule: Sunday = weekly, Wednesday = midweek
+            DAY=$(date +%u)  # 7=Sunday, 3=Wednesday
+            if [ "$DAY" = "7" ]; then
+              echo "mode=weekly" >> $GITHUB_OUTPUT
+            else
+              echo "mode=midweek" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Run Sentinel
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        run: python sentinel.py ${{ steps.mode.outputs.mode }}
