@@ -14,6 +14,7 @@ Environment variables (set in GitHub Actions secrets):
 
 import os
 import sys
+import time
 import argparse
 import smtplib
 from datetime import datetime, timedelta, timezone
@@ -208,18 +209,28 @@ If nothing qualifies, respond with exactly: NO_ALERT
 """
 
 # ── Claude call ───────────────────────────────────────────────────────────────
+import time
 
 def run_claude(prompt, model=PRIMARY_MODEL):
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    response = client.messages.create(
-        model=model,
-        max_tokens=4096,
-        system=SOUL,
-        tools=[{"type": "web_search_20250305", "name": "web_search"}],
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text_parts = [block.text for block in response.content if hasattr(block, "text")]
-    return "\n".join(text_parts).strip()
+    for attempt in range(5):
+        try:
+            response = client.messages.create(
+                model=model,
+                max_tokens=4096,
+                system=SOUL,
+                tools=[{"type": "web_search_20250305", "name": "web_search"}],
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text_parts = [block.text for block in response.content if hasattr(block, "text")]
+            return "\n".join(text_parts).strip()
+        except anthropic.RateLimitError:
+            if attempt < 4:
+                wait = 60 * (attempt + 1)
+                print(f"Rate limit hit, waiting {wait} seconds...")
+                time.sleep(wait)
+            else:
+                raise
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 
