@@ -33,7 +33,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install openai tavily-python requests beautifulsoup4
+        run: pip install google-genai
 
       - name: Determine run mode
         id: mode
@@ -52,8 +52,7 @@ jobs:
 
       - name: Run Sentinel
         env:
-          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
