@@ -3,10 +3,11 @@ Sentinel — Xavor Strategic Intelligence Agent
 Runs via GitHub Actions cron. Delivers digest by email.
 
 Requirements:
-    pip install anthropic
+    pip install openai tavily-python
 
 Environment variables (set in GitHub Actions secrets):
-    ANTHROPIC_API_KEY
+    NVIDIA_API_KEY
+    TAVILY_API_KEY
     EMAIL_FROM        (Gmail address)
     EMAIL_TO          (recipient address, comma-separated for multiple)
     EMAIL_PASSWORD    (Gmail App Password)
@@ -21,16 +22,24 @@ from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-import anthropic
+from openai import OpenAI
+from tavily import TavilyClient
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
-EMAIL_FROM        = os.environ["EMAIL_FROM"]
-EMAIL_TO          = os.environ["EMAIL_TO"]
-EMAIL_PASSWORD    = os.environ["EMAIL_PASSWORD"]
+NVIDIA_API_KEY = os.environ["NVIDIA_API_KEY"]
+TAVILY_API_KEY = os.environ["TAVILY_API_KEY"]
+EMAIL_FROM     = os.environ["EMAIL_FROM"]
+EMAIL_TO       = os.environ["EMAIL_TO"]
+EMAIL_PASSWORD = os.environ["EMAIL_PASSWORD"]
 
-PRIMARY_MODEL = "claude-sonnet-4-5-20250929"
+PRIMARY_MODEL = "meta/llama-3.3-70b-instruct"
+
+nvidia_client = OpenAI(
+    base_url="https://integrate.api.nvidia.com/v1",
+    api_key=NVIDIA_API_KEY,
+)
+tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
 
 # ── Soul (system prompt) ──────────────────────────────────────────────────────
 
@@ -110,32 +119,100 @@ SENTINEL × XAVOR — WEEKLY DIGEST [DATE RANGE]
 • [Item]: [One line why it's irrelevant]
 """
 
+# ── Web search ────────────────────────────────────────────────────────────────
+
+WEEKLY_QUERIES = [
+    "enterprise AI news this week",
+    "physical AI robotics news this week",
+    "Salesforce AI news this week",
+    "ServiceNow AI news this week",
+    "agentic AI enterprise this week",
+    "Aras PLM OR Oracle AI news 2026",
+    "edge AI IoT news this week",
+    "humanoid robotics industrial news this week",
+]
+
+MIDWEEK_QUERIES = [
+    "Salesforce OR ServiceNow OR Oracle major launch announcement",
+    "enterprise AI funding round 50 million 2026",
+    "physical AI robotics major partnership deal",
+]
+
+
+def gather_search_results(queries, max_results=5):
+    all_results = []
+    for query in queries:
+        try:
+            response = tavily_client.search(
+                query=query,
+                search_depth="basic",
+                max_results=max_results,
+                include_answer=False,
+            )
+            for r in response.get("results", []):
+                all_results.append(
+                    f"[{r.get('published_date', 'n/d')}] {r['title']}\n"
+                    f"URL: {r['url']}\n"
+                    f"Snippet: {r['content'][:300]}"
+                )
+        except Exception as e:
+            print(f"Search failed for '{query}': {e}")
+        time.sleep(0.3)
+    return "\n\n".join(all_results)
+
+
+# ── LLM call ──────────────────────────────────────────────────────────────────
+
+def run_llm(system, user_prompt, model=PRIMARY_MODEL):
+    for attempt in range(5):
+        try:
+            response = nvidia_client.chat.completions.create(
+                model=model,
+                max_tokens=4096,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user",   "content": user_prompt},
+                ],
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            if attempt < 4:
+                wait = 30 * (attempt + 1)
+                print(f"Request failed ({e}), retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
+
+
 # ── Prompts ───────────────────────────────────────────────────────────────────
 
-def weekly_prompt(date_range):
+def weekly_prompt(date_range, search_results):
     return f"""
 Run Sentinel's weekly research cycle for {date_range}.
 
-Search for:
-- "enterprise AI news this week"
-- "physical AI robotics news this week"
-- "Salesforce AI news this week"
-- "ServiceNow AI news this week"
-- "agentic AI enterprise this week"
-- "Aras PLM news 2026"
-- "Oracle AI news this week"
-- "edge AI IoT news this week"
-- Check: TechCrunch, VentureBeat, The Robot Report, IEEE Spectrum, company blogs
+Below are live search results gathered from the web. Use ONLY these as your sources.
+Do not fabricate any news items not present here. Mark anything uncertain as [unverified].
+
+--- SEARCH RESULTS START ---
+{search_results}
+--- SEARCH RESULTS END ---
 
 Score signals. Filter aggressively — only include what genuinely matters to Xavor.
-Produce the digest in the EXACT format specified. Be brief. No filler.
+Produce the digest in the EXACT format specified in your instructions. Be brief. No filler.
 """
 
-def midweek_prompt(date_range):
+
+def midweek_prompt(date_range, search_results):
     return f"""
 Run Sentinel's mid-week scan for {date_range}.
 
-Search only for HIGH signals (4+ on Xavor Relevance AND Market Impact):
+Below are live search results. Use ONLY these as your sources.
+
+--- SEARCH RESULTS START ---
+{search_results}
+--- SEARCH RESULTS END ---
+
+Look only for HIGH signals (4+ on Xavor Relevance AND Market Impact):
 - Major launches from Salesforce, ServiceNow, Oracle, Aras, Propel
 - Funding rounds >$50M in Enterprise AI or Physical AI
 - Major partnerships in Xavor's ecosystem
@@ -149,28 +226,6 @@ Then list any other qualifying signals in the standard bullet format.
 If nothing qualifies, respond with exactly: NO_ALERT
 """
 
-# ── Claude call ───────────────────────────────────────────────────────────────
-
-def run_claude(prompt, model=PRIMARY_MODEL):
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    for attempt in range(5):
-        try:
-            response = client.messages.create(
-                model=model,
-                max_tokens=8192,
-                system=SOUL,
-                tools=[{"type": "web_search_20250305", "name": "web_search"}],
-                messages=[{"role": "user", "content": prompt}],
-            )
-            text_parts = [block.text for block in response.content if hasattr(block, "text")]
-            return "\n".join(text_parts).strip()
-        except anthropic.RateLimitError:
-            if attempt < 4:
-                wait = 60 * (attempt + 1)
-                print(f"Rate limit hit, waiting {wait} seconds...")
-                time.sleep(wait)
-            else:
-                raise
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 
@@ -197,6 +252,7 @@ def send_email(subject, body):
 
     print(f"Email sent to: {', '.join(recipients)}")
 
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -214,7 +270,10 @@ def main():
 
     if args.mode == "weekly":
         print(f"Running weekly digest for {date_range}...")
-        digest = run_claude(weekly_prompt(date_range))
+        print("Gathering search results...")
+        search_results = gather_search_results(WEEKLY_QUERIES)
+        print(f"Collected {len(search_results.splitlines())} lines of search data. Running LLM...")
+        digest = run_llm(SOUL, weekly_prompt(date_range, search_results))
         print("Sending email...")
         send_email(
             subject=f"Sentinel x Xavor - Weekly Digest {date_range}",
@@ -224,7 +283,10 @@ def main():
 
     elif args.mode == "midweek":
         print(f"Running mid-week scan for {date_range}...")
-        result = run_claude(midweek_prompt(date_range))
+        print("Gathering search results...")
+        search_results = gather_search_results(MIDWEEK_QUERIES)
+        print("Running LLM...")
+        result = run_llm(SOUL, midweek_prompt(date_range, search_results))
         if result.strip() == "NO_ALERT":
             print("No high-priority signals found. No email sent.")
             sys.exit(0)
@@ -234,6 +296,7 @@ def main():
             body=result,
         )
         print("Alert sent.")
+
 
 if __name__ == "__main__":
     main()
