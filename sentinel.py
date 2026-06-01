@@ -3,7 +3,7 @@ Sentinel — Xavor Strategic Intelligence Agent
 Runs via GitHub Actions cron. Delivers digest by email.
 
 Requirements:
-    pip install openai tavily-python
+    pip install openai tavily-python requests beautifulsoup4
 
 Environment variables (set in GitHub Actions secrets):
     NVIDIA_API_KEY
@@ -22,6 +22,8 @@ from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+import requests
+from bs4 import BeautifulSoup
 from openai import OpenAI
 from tavily import TavilyClient
 
@@ -139,26 +141,52 @@ MIDWEEK_QUERIES = [
 ]
 
 
+def fetch_article(url, char_limit=3000):
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; SentinelBot/1.0)"}
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
+            tag.decompose()
+        text = " ".join(soup.get_text(separator=" ").split())
+        return text[:char_limit]
+    except Exception:
+        return None
+
+
 def gather_search_results(queries, max_results=5):
     all_results = []
+    seen_urls = set()
+
     for query in queries:
         try:
             response = tavily_client.search(
                 query=query,
-                search_depth="basic",
+                search_depth="advanced",
                 max_results=max_results,
                 include_answer=False,
             )
             for r in response.get("results", []):
+                url = r["url"]
+                if url in seen_urls:
+                    continue
+                seen_urls.add(url)
+
+                full_text = fetch_article(url)
+                body = full_text if full_text else r["content"][:500]
+
                 all_results.append(
                     f"[{r.get('published_date', 'n/d')}] {r['title']}\n"
-                    f"URL: {r['url']}\n"
-                    f"Snippet: {r['content'][:300]}"
+                    f"URL: {url}\n"
+                    f"Content: {body}"
                 )
+                time.sleep(0.5)
         except Exception as e:
             print(f"Search failed for '{query}': {e}")
         time.sleep(0.3)
-    return "\n\n".join(all_results)
+
+    return "\n\n---\n\n".join(all_results)
 
 
 # ── LLM call ──────────────────────────────────────────────────────────────────
