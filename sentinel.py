@@ -3,11 +3,10 @@ Sentinel — Xavor Strategic Intelligence Agent
 Runs via GitHub Actions cron. Delivers digest by email.
 
 Requirements:
-    pip install openai tavily-python requests beautifulsoup4
+    pip install google-genai
 
 Environment variables (set in GitHub Actions secrets):
-    NVIDIA_API_KEY
-    TAVILY_API_KEY
+    GEMINI_API_KEY
     EMAIL_FROM        (Gmail address)
     EMAIL_TO          (recipient address, comma-separated for multiple)
     EMAIL_PASSWORD    (Gmail App Password)
@@ -22,26 +21,19 @@ from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-import requests
-from bs4 import BeautifulSoup
-from openai import OpenAI
-from tavily import TavilyClient
+from google import genai
+from google.genai import types
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-NVIDIA_API_KEY = os.environ["NVIDIA_API_KEY"]
-TAVILY_API_KEY = os.environ["TAVILY_API_KEY"]
+GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 EMAIL_FROM     = os.environ["EMAIL_FROM"]
 EMAIL_TO       = os.environ["EMAIL_TO"]
 EMAIL_PASSWORD = os.environ["EMAIL_PASSWORD"]
 
-PRIMARY_MODEL = "meta/llama-3.3-70b-instruct"
+PRIMARY_MODEL = "gemini-2.0-flash"
 
-nvidia_client = OpenAI(
-    base_url="https://integrate.api.nvidia.com/v1",
-    api_key=NVIDIA_API_KEY,
-)
-tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ── Soul (system prompt) ──────────────────────────────────────────────────────
 
@@ -69,15 +61,17 @@ Physical AI: humanoid/industrial robotics, edge AI, IoT, digital twins, computer
 Only include signals scoring 3+ on Xavor Relevance OR Content Potential, AND 3+ on one other dimension.
 
 ## Output Rules
-- Be concise. Each item = 2-4 bullet points max. No paragraphs.
-- One "Xavor angle" per item (1 sentence).
-- One "Content idea" per item (1 sentence).
+- Each item = 3-5 bullet points. Be specific — include names, numbers, dates from the source.
+- One "Xavor angle" per item (2 sentences: what it means + what to do).
+- One "Content idea" per item (1 sentence, include the format and target audience).
 - Signal strength: High / Medium / Low only.
-- Strategy signals: start with "Xavor should..." or "Risk:" or "This validates..."
+- Strategy signals: start with "Xavor should..." or "Risk:" or "This validates..." — be specific and actionable.
 - Noise filter: 2 items max, one line each.
-- NO padding. NO intros. NO conclusions. If a week is quiet, say so briefly.
-- Track Salesforce, ServiceNow, Oracle, Aras, Propel with priority.
+- NO generic filler. Every bullet must contain a specific fact from the source material.
+- Aim for at least 3 items per qualifying section.
+- Track Salesforce, ServiceNow, Oracle, Aras, Propel with priority — always include if anything relevant found.
 - Never fabricate sources. Mark unverified with [unverified].
+- Content Calendar: always 5 ideas, each with a target audience.
 
 ## Output Format — follow EXACTLY, no deviations:
 
@@ -90,8 +84,8 @@ SENTINEL × XAVOR — WEEKLY DIGEST [DATE RANGE]
 
 📦 NEW PRODUCTS & LAUNCHES
 • [Product/Company] ([Date]): [One line description]
-  - Xavor angle: [1 sentence]
-  - Content idea: [1 sentence]
+  - Xavor angle: [2 sentences]
+  - Content idea: [1 sentence with format and audience]
   - Source: [link or publication name]
   - Strength: High / Medium / Low
 
@@ -107,9 +101,11 @@ SENTINEL × XAVOR — WEEKLY DIGEST [DATE RANGE]
 ---
 
 🎯 CONTENT CALENDAR IDEAS
-1. [Title] — [Format] — [1 sentence on angle and service line]
-2. [Title] — [Format] — [1 sentence on angle and service line]
-3. [Title] — [Format] — [1 sentence on angle and service line]
+1. [Title] — [Format] — [Target audience] — [1 sentence on angle and service line]
+2. [Title] — [Format] — [Target audience] — [1 sentence on angle and service line]
+3. [Title] — [Format] — [Target audience] — [1 sentence on angle and service line]
+4. [Title] — [Format] — [Target audience] — [1 sentence on angle and service line]
+5. [Title] — [Format] — [Target audience] — [1 sentence on angle and service line]
 
 📊 STRATEGY SIGNALS
 • [Signal starting with "Xavor should..." or "Risk:" or "This validates..."]
@@ -121,126 +117,34 @@ SENTINEL × XAVOR — WEEKLY DIGEST [DATE RANGE]
 • [Item]: [One line why it's irrelevant]
 """
 
-# ── Web search ────────────────────────────────────────────────────────────────
-
-WEEKLY_QUERIES = [
-    "enterprise AI news this week",
-    "physical AI robotics news this week",
-    "Salesforce AI news this week",
-    "ServiceNow AI news this week",
-    "agentic AI enterprise this week",
-    "Aras PLM OR Oracle AI news 2026",
-    "edge AI IoT news this week",
-    "humanoid robotics industrial news this week",
-]
-
-MIDWEEK_QUERIES = [
-    "Salesforce OR ServiceNow OR Oracle major launch announcement",
-    "enterprise AI funding round 50 million 2026",
-    "physical AI robotics major partnership deal",
-]
-
-
-def fetch_article(url, char_limit=3000):
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; SentinelBot/1.0)"}
-        resp = requests.get(url, headers=headers, timeout=10)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-        for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
-            tag.decompose()
-        text = " ".join(soup.get_text(separator=" ").split())
-        return text[:char_limit]
-    except Exception:
-        return None
-
-
-def gather_search_results(queries, max_results=5):
-    all_results = []
-    seen_urls = set()
-
-    for query in queries:
-        try:
-            response = tavily_client.search(
-                query=query,
-                search_depth="advanced",
-                max_results=max_results,
-                include_answer=False,
-            )
-            for r in response.get("results", []):
-                url = r["url"]
-                if url in seen_urls:
-                    continue
-                seen_urls.add(url)
-
-                full_text = fetch_article(url)
-                body = full_text if full_text else r["content"][:500]
-
-                all_results.append(
-                    f"[{r.get('published_date', 'n/d')}] {r['title']}\n"
-                    f"URL: {url}\n"
-                    f"Content: {body}"
-                )
-                time.sleep(0.5)
-        except Exception as e:
-            print(f"Search failed for '{query}': {e}")
-        time.sleep(0.3)
-
-    return "\n\n---\n\n".join(all_results)
-
-
-# ── LLM call ──────────────────────────────────────────────────────────────────
-
-def run_llm(system, user_prompt, model=PRIMARY_MODEL):
-    for attempt in range(5):
-        try:
-            response = nvidia_client.chat.completions.create(
-                model=model,
-                max_tokens=4096,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user",   "content": user_prompt},
-                ],
-            )
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            if attempt < 4:
-                wait = 30 * (attempt + 1)
-                print(f"Request failed ({e}), retrying in {wait}s...")
-                time.sleep(wait)
-            else:
-                raise
-
-
 # ── Prompts ───────────────────────────────────────────────────────────────────
 
-def weekly_prompt(date_range, search_results):
+def weekly_prompt(date_range):
     return f"""
 Run Sentinel's weekly research cycle for {date_range}.
 
-Below are live search results gathered from the web. Use ONLY these as your sources.
-Do not fabricate any news items not present here. Mark anything uncertain as [unverified].
+Search for:
+- Enterprise AI and agentic AI news this week
+- Physical AI, humanoid robotics, and industrial automation news this week
+- Salesforce AI (Einstein, Agentforce) news this week
+- ServiceNow AI news this week
+- Oracle AI and Oracle Agile PLM news this week
+- Aras PLM and Propel PLM news this week
+- Edge AI, IoT, and digital twin news this week
+- Major enterprise AI funding rounds and M&A this week
+- AI governance and enterprise LLM deployment news this week
 
---- SEARCH RESULTS START ---
-{search_results}
---- SEARCH RESULTS END ---
+Check: TechCrunch, VentureBeat, The Robot Report, IEEE Spectrum, company blogs, press releases.
 
 Score signals. Filter aggressively — only include what genuinely matters to Xavor.
-Produce the digest in the EXACT format specified in your instructions. Be brief. No filler.
+Produce the digest in the EXACT format specified. Be specific. No filler.
 """
 
-
-def midweek_prompt(date_range, search_results):
+def midweek_prompt(date_range):
     return f"""
 Run Sentinel's mid-week scan for {date_range}.
 
-Below are live search results. Use ONLY these as your sources.
-
---- SEARCH RESULTS START ---
-{search_results}
---- SEARCH RESULTS END ---
-
-Look only for HIGH signals (4+ on Xavor Relevance AND Market Impact):
+Search only for HIGH signals (4+ on Xavor Relevance AND Market Impact):
 - Major launches from Salesforce, ServiceNow, Oracle, Aras, Propel
 - Funding rounds >$50M in Enterprise AI or Physical AI
 - Major partnerships in Xavor's ecosystem
@@ -254,6 +158,29 @@ Then list any other qualifying signals in the standard bullet format.
 If nothing qualifies, respond with exactly: NO_ALERT
 """
 
+# ── Gemini call ───────────────────────────────────────────────────────────────
+
+def run_gemini(prompt, model=PRIMARY_MODEL):
+    for attempt in range(5):
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=SOUL,
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                    max_output_tokens=8192,
+                    temperature=0.3,
+                ),
+            )
+            return response.text.strip()
+        except Exception as e:
+            if attempt < 4:
+                wait = 30 * (attempt + 1)
+                print(f"Request failed ({e}), retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 
@@ -280,7 +207,6 @@ def send_email(subject, body):
 
     print(f"Email sent to: {', '.join(recipients)}")
 
-
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -298,10 +224,7 @@ def main():
 
     if args.mode == "weekly":
         print(f"Running weekly digest for {date_range}...")
-        print("Gathering search results...")
-        search_results = gather_search_results(WEEKLY_QUERIES)
-        print(f"Collected {len(search_results.splitlines())} lines of search data. Running LLM...")
-        digest = run_llm(SOUL, weekly_prompt(date_range, search_results))
+        digest = run_gemini(weekly_prompt(date_range))
         print("Sending email...")
         send_email(
             subject=f"Sentinel x Xavor - Weekly Digest {date_range}",
@@ -311,10 +234,7 @@ def main():
 
     elif args.mode == "midweek":
         print(f"Running mid-week scan for {date_range}...")
-        print("Gathering search results...")
-        search_results = gather_search_results(MIDWEEK_QUERIES)
-        print("Running LLM...")
-        result = run_llm(SOUL, midweek_prompt(date_range, search_results))
+        result = run_gemini(midweek_prompt(date_range))
         if result.strip() == "NO_ALERT":
             print("No high-priority signals found. No email sent.")
             sys.exit(0)
@@ -324,7 +244,6 @@ def main():
             body=result,
         )
         print("Alert sent.")
-
 
 if __name__ == "__main__":
     main()
