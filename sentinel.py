@@ -63,13 +63,13 @@ Cloud: multi-cloud, cloud migration, cloud-native, serverless, FinOps, cloud sec
 Only include signals scoring 3+ on Xavor Relevance OR Content Potential, AND 3+ on one other dimension.
 
 ## Output Rules
-- Each item = 2 bullets max. One fact line (name, number, date). One "Xavor angle" (1 sentence: what to do about it).
-- One "Content idea" per item (format + audience + angle, all in one line).
+- Each item = 3–5 bullets with specific facts: names, numbers, dates, percentages, quoted language. No paraphrased generalities.
+- One "Xavor angle" per item: 2 sentences — what it means for Xavor, and what to do about it.
+- One "Content idea" per item: full title + format + audience + pain point addressed, all in one line.
 - Allowed content formats ONLY: LinkedIn carousel, short reel, longform blog, LinkedIn article (max 1k words). Never suggest webinars or any other format.
-- Signal strength: High / Medium / Low only — inline, no separate line.
-- Strategy signals: start with "Xavor should..." or "Risk:" or "This validates..." — specific and actionable.
+- Signal strength: High / Medium / Low — on its own line.
+- Strategy signals: start with "Xavor should..." or "Risk:" or "This validates..." — specific, with numbers or timelines where available.
 - Noise filter: 2 items max, one line each.
-- NO generic filler. Every bullet must contain a specific fact from the source.
 - Aim for at least 3 items per qualifying section.
 - Track Salesforce, ServiceNow, Oracle, Aras, Propel with priority — always include if anything relevant found.
 - Never fabricate sources. Mark unverified with [unverified].
@@ -93,18 +93,22 @@ SENTINEL × XAVOR — WEEKLY DIGEST [DATE RANGE]
 ---
 
 📦 NEW PRODUCTS & LAUNCHES
-• [Product/Company] ([Date]): [What it is and why it matters] — Strength: High / Medium / Low
-  - Xavor angle: [1 sentence — what to do]
-  - Content idea: [Format] for [audience] — [angle and service line] — Source: [link or name]
+• [Product/Company] ([Date]): [What it is]
+  - [Specific fact, stat, or detail]
+  - [Specific fact, stat, or detail]
+  - Xavor angle: [2 sentences — what it means + what to do]
+  - Content idea: "[Title]" — [Format] — [Audience] — [Pain point + service line]
+  - Source: [link or publication]
+  - Strength: High / Medium / Low
 
 📄 RESEARCH & BREAKTHROUGHS
-[Same format. Skip section entirely if nothing qualifies.]
+[Same format as above. Skip section entirely if nothing qualifies.]
 
 🤝 PARTNERSHIPS & DEALS
-[Same format. Skip section entirely if nothing qualifies.]
+[Same format as above. Skip section entirely if nothing qualifies.]
 
 💰 FUNDING & M&A
-[Same format. Skip section entirely if nothing qualifies.]
+[Same format as above. Skip section entirely if nothing qualifies.]
 
 ---
 
@@ -151,48 +155,65 @@ def weekly_prompt(date_range):
     return f"""
 Run Sentinel's weekly research cycle for {date_range}.
 
-Search across all of these areas:
+## Source Quality Filter
+Prefer: named research reports (with sample size, date, or methodology), official company newsrooms and press releases, trade press with original reporting, analyst firms (Gartner, Forrester, IDC, McKinsey, Deloitte, BCG, Accenture), and practitioner-authored content with specific data or experience.
+Exclude: AI hype articles without original data, clickbait headlines, influencer hot takes without sourcing, anonymous opinion pieces, and content that states a trend without citing who found it, when, or how.
+
+## Search Strategy
+Do not default to broad "[topic] news this week" queries — these surface the same top results every week. Instead, vary your approach:
+- Named announcements: "[company] announcement" OR "[product] launch" OR "[product] GA" {date_range}
+- Research hunting: "[topic] survey 2026" OR "[topic] report 2026" OR "[topic] study 2026"
+- Deals and moves: "[company] acquisition" OR "[company] partnership" OR "[company] integration" {date_range}
+- Niche trade press and analyst content beyond the top search results
+- Site-specific: site:substack.com [topic], site:linkedin.com/pulse [topic], site:reddit.com [topic]
+- Regulatory and compliance: specific laws, deadlines, enforcement actions, governance mandates
+- Follow threads: if a finding is interesting, search deeper on that specific story rather than moving to the next broad topic
+
+## Domains
 
 ENTERPRISE AI & AGENTIC AI
-- Enterprise AI and agentic AI news this week
-- Salesforce AI (Einstein, Agentforce) news
-- ServiceNow AI news
-- Oracle AI and Oracle Agile PLM news
-- Aras PLM and Propel PLM news
-- AI governance and enterprise LLM deployment news
+- Specific product releases or GA announcements: Salesforce Agentforce, ServiceNow AI Platform, Oracle AI, agentic frameworks and tools
+- Named research reports on enterprise AI adoption, agent deployment, or governance — look for ones with survey data and named methodology
+- Aras PLM, Propel PLM — releases, customer wins, analyst mentions, competitive moves
+- AI governance: regulatory deadlines (EU AI Act, US state laws), compliance frameworks, enterprise policy tooling
+- Build-vs-buy debates, platform comparison discussions, or implementation post-mortems from practitioners
 
 PHYSICAL AI
-- Physical AI, humanoid robotics, and industrial automation news
-- Edge AI, IoT, and digital twin news
+- Named deployment contracts or partnerships (binding agreements, RaaS deals, pilot-to-production announcements)
+- Specific hardware or platform launches in humanoid/industrial robotics
+- Edge AI integration announcements with named vendors or verticals
+- Digital twin deployments with named companies, use cases, or outcomes
 
 DATA
-- Data platform and data engineering news (Databricks, Snowflake, dbt, Fivetran, etc.)
-- Data governance, data mesh, and data observability
-- Real-time data and streaming analytics
-- MLOps and model operations in enterprise
+- Specific platform releases with named features: Databricks, Snowflake, dbt, Fivetran, Starburst, Monte Carlo, etc.
+- Data governance: Unity Catalog, data mesh, observability tooling — named product updates
+- M&A in the modern data stack — deal size, acquirer, stated rationale
+- MLOps and LLMOps: named tooling updates, agent lifecycle management, evaluation frameworks
 
 CLOUD
-- Multi-cloud strategy and news (AWS, Azure, GCP)
-- Cloud-native and serverless developments
-- FinOps and cloud cost management
-- Cloud migration and modernization trends
+- Named cloud architecture decisions, migrations, or multi-cloud strategy announcements
+- FinOps: AI cost management, token spend tracking, GPU cost attribution, named tooling
+- AWS, Azure, GCP — specific service launches or pricing changes relevant to enterprise AI
+- Cloud security and governance developments with named frameworks or incidents
 
 FUNDING & M&A
-- Enterprise AI, Data, and Cloud funding rounds and acquisitions this week
+- Deals with dollar amounts, named acquirer, named target, stated strategic rationale
+- Physical AI and robotics investment rounds
 
 ENTERPRISE DECISION-MAKER PULSE
-Search specifically for what decision-makers are saying and reading:
-- LinkedIn posts and articles (search Google: site:linkedin.com "enterprise AI" OR "data platform" OR "cloud migration" this week)
-- Reddit discussions (search Google: site:reddit.com enterprise CTO OR VP engineering OR data platform)
-- Substack newsletters and articles (search Google: site:substack.com enterprise AI OR data OR cloud)
-- Analyst reports and thought leadership: Gartner, McKinsey & Company, Forrester, IDC, Deloitte Insights, BCG, Accenture
-- Focus on: what pain points are being expressed, what solutions are gaining traction, what conversations are shaping enterprise buyer sentiment
+Hunt for what practitioners and leaders are actually writing and discussing — not what vendors say they care about:
+- LinkedIn: site:linkedin.com/pulse "[pain point]" 2026 — look for posts from named CTO, VP, or CDO roles
+- Substack: site:substack.com "enterprise AI" OR "data engineering" OR "cloud architecture" 2026
+- Reddit: site:reddit.com "enterprise" AND ("AI agents" OR "data platform" OR "PLM" OR "cloud costs")
+- Analyst reports: search by report name or topic — "Gartner magic quadrant 2026" OR "Forrester wave 2026" OR "IDC report enterprise AI"
+- Focus on: specific pain points with quoted or cited language, named solutions gaining traction, active debates and decisions enterprise buyers are navigating
 
-Primary sources to check: TechCrunch, VentureBeat, The Robot Report, IEEE Spectrum, company blogs, press releases, Gartner, McKinsey, Forrester, IDC, Deloitte Insights, BCG, Accenture, LinkedIn (via Google), Reddit, Substack.
+## Sources
+Company newsrooms, press releases, TechCrunch, VentureBeat, The Robot Report, IEEE Spectrum, Futurum, SiliconANGLE, Constellation Research, Gartner, McKinsey, Forrester, IDC, Deloitte Insights, BCG, Accenture, FinOps Foundation, LinkedIn (via Google), Reddit, Substack.
 
-Limit yourself to 10 web searches total. Prioritise breadth — cover all sections — over depth on any single topic.
 Score all signals. Filter aggressively — only include what genuinely matters to Xavor.
-Produce the digest in the EXACT format specified. Be specific. No filler.
+Every item in the digest must cite a specific fact, statistic, named product, named company, or dated event — no paraphrased generalities.
+Produce the digest in the EXACT format specified.
 """
 
 # ── Claude call ───────────────────────────────────────────────────────────────
