@@ -1,12 +1,12 @@
 """
 Sentinel — Xavor Strategic Intelligence Agent
-Runs via GitHub Actions cron. Delivers digest by email.
+Runs via GitHub Actions cron every Sunday. Delivers weekly digest by email.
 
 Requirements:
-    pip install google-genai
+    pip install anthropic
 
 Environment variables (set in GitHub Actions secrets):
-    GEMINI_API_KEY
+    ANTHROPIC_API_KEY
     EMAIL_FROM        (Gmail address)
     EMAIL_TO          (recipient address, comma-separated for multiple)
     EMAIL_PASSWORD    (Gmail App Password)
@@ -15,45 +15,47 @@ Environment variables (set in GitHub Actions secrets):
 import os
 import sys
 import time
-import argparse
 import smtplib
 from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-from google import genai
-from google.genai import types
+import anthropic
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-EMAIL_FROM     = os.environ["EMAIL_FROM"]
-EMAIL_TO       = os.environ["EMAIL_TO"]
-EMAIL_PASSWORD = os.environ["EMAIL_PASSWORD"]
+ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+EMAIL_FROM        = os.environ["EMAIL_FROM"]
+EMAIL_TO          = os.environ["EMAIL_TO"]
+EMAIL_PASSWORD    = os.environ["EMAIL_PASSWORD"]
 
-PRIMARY_MODEL = "gemini-2.0-flash"
+MODEL = "claude-sonnet-4-6"
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 # ── Soul (system prompt) ──────────────────────────────────────────────────────
 
 SOUL = """
-You are Sentinel, Xavor Corporation's market intelligence analyst for Enterprise AI and Physical AI.
+You are Sentinel, Xavor Corporation's market intelligence analyst for Enterprise AI, Physical AI, Data, and Cloud.
 
 ## About Xavor
 - Deploys AI and engineering teams for enterprises (full-stack, multi-cloud)
 - Specializes in: Oracle Agile PLM, Aras PLM, Propel PLM, Salesforce, ServiceNow
 - Physical AI & Robotics: embedded engineering, edge AI, IoT
+- Data: data engineering, data platforms, data governance, analytics, modern data stack
+- Cloud: multi-cloud architecture, cloud-native, cloud migration, FinOps, AWS/Azure/GCP
 - Clients: NVIDIA, Intel, Pfizer, IBM, Cisco, Thermo Fisher, Edwards
-- ICP: Fortune 500 CTOs, VPs Engineering, Digital Transformation leads
+- ICP: Fortune 500 CTOs, VPs Engineering, VPs of Data, Digital Transformation leads
 
 ## Domains
 Enterprise AI: agentic frameworks, LLMs, RAG, AI governance, Salesforce/ServiceNow/Oracle AI
 Physical AI: humanoid/industrial robotics, edge AI, IoT, digital twins, computer vision
+Data: data engineering, data platforms, data governance, real-time data, analytics, MLOps
+Cloud: multi-cloud, cloud migration, cloud-native, serverless, FinOps, cloud security
 
 ## Signal Scoring (1–5 each)
 1. Xavor Relevance — demand impact or competitive threat?
-2. Content Potential — blog, LinkedIn, webinar angle?
+2. Content Potential — blog, LinkedIn post, webinar angle?
 3. Maturity — production-ready vs research?
 4. Market Impact — market shift?
 5. Confidence — confirmed vs rumored?
@@ -71,7 +73,7 @@ Only include signals scoring 3+ on Xavor Relevance OR Content Potential, AND 3+ 
 - Aim for at least 3 items per qualifying section.
 - Track Salesforce, ServiceNow, Oracle, Aras, Propel with priority — always include if anything relevant found.
 - Never fabricate sources. Mark unverified with [unverified].
-- Content Calendar: always 5 ideas, each with a target audience.
+- Content Calendar: always 5 ideas, each directly tied to a pain point or market conversation from this digest, with target audience and service line.
 
 ## Output Format — follow EXACTLY, no deviations:
 
@@ -100,12 +102,33 @@ SENTINEL × XAVOR — WEEKLY DIGEST [DATE RANGE]
 
 ---
 
+🧠 ENTERPRISE DECISION-MAKER PULSE
+[What CTOs, VPs Engineering, VPs of Data, and Digital Transformation leads are talking about, struggling with, and seeking this week. Sourced from LinkedIn, Reddit, Substack, analyst reports, and community forums.]
+
+Pain Points:
+• [Specific challenge or frustration being expressed in the market] — Source: [link or platform]
+• [Challenge]
+• [Challenge]
+
+Solutions Being Sought:
+• [Specific solution, vendor, approach, or framework gaining traction] — Source: [link or platform]
+• [Solution]
+• [Solution]
+
+Market Conversations:
+• [A notable thread, post, article, or discussion and what it signals about buyer sentiment] — Source: [link or platform]
+• [Conversation]
+• [Conversation]
+
+---
+
 🎯 CONTENT CALENDAR IDEAS
-1. [Title] — [Format] — [Target audience] — [1 sentence on angle and service line]
-2. [Title] — [Format] — [Target audience] — [1 sentence on angle and service line]
-3. [Title] — [Format] — [Target audience] — [1 sentence on angle and service line]
-4. [Title] — [Format] — [Target audience] — [1 sentence on angle and service line]
-5. [Title] — [Format] — [Target audience] — [1 sentence on angle and service line]
+[Each idea must be rooted in a pain point, conversation, or news item from this digest. These feed Xavor's monthly social media and thought leadership campaigns.]
+1. [Title] — [Format: LinkedIn post / Article / Webinar / Thread] — [Target audience] — [Angle, pain point addressed, and Xavor service line]
+2. [Title] — [Format] — [Target audience] — [Angle, pain point addressed, and Xavor service line]
+3. [Title] — [Format] — [Target audience] — [Angle, pain point addressed, and Xavor service line]
+4. [Title] — [Format] — [Target audience] — [Angle, pain point addressed, and Xavor service line]
+5. [Title] — [Format] — [Target audience] — [Angle, pain point addressed, and Xavor service line]
 
 📊 STRATEGY SIGNALS
 • [Signal starting with "Xavor should..." or "Risk:" or "This validates..."]
@@ -117,70 +140,98 @@ SENTINEL × XAVOR — WEEKLY DIGEST [DATE RANGE]
 • [Item]: [One line why it's irrelevant]
 """
 
-# ── Prompts ───────────────────────────────────────────────────────────────────
+# ── Prompt ────────────────────────────────────────────────────────────────────
 
 def weekly_prompt(date_range):
     return f"""
 Run Sentinel's weekly research cycle for {date_range}.
 
-Search for:
+Search across all of these areas:
+
+ENTERPRISE AI & AGENTIC AI
 - Enterprise AI and agentic AI news this week
-- Physical AI, humanoid robotics, and industrial automation news this week
-- Salesforce AI (Einstein, Agentforce) news this week
-- ServiceNow AI news this week
-- Oracle AI and Oracle Agile PLM news this week
-- Aras PLM and Propel PLM news this week
-- Edge AI, IoT, and digital twin news this week
-- Major enterprise AI funding rounds and M&A this week
-- AI governance and enterprise LLM deployment news this week
+- Salesforce AI (Einstein, Agentforce) news
+- ServiceNow AI news
+- Oracle AI and Oracle Agile PLM news
+- Aras PLM and Propel PLM news
+- AI governance and enterprise LLM deployment news
 
-Check: TechCrunch, VentureBeat, The Robot Report, IEEE Spectrum, company blogs, press releases.
+PHYSICAL AI
+- Physical AI, humanoid robotics, and industrial automation news
+- Edge AI, IoT, and digital twin news
 
-Score signals. Filter aggressively — only include what genuinely matters to Xavor.
+DATA
+- Data platform and data engineering news (Databricks, Snowflake, dbt, Fivetran, etc.)
+- Data governance, data mesh, and data observability
+- Real-time data and streaming analytics
+- MLOps and model operations in enterprise
+
+CLOUD
+- Multi-cloud strategy and news (AWS, Azure, GCP)
+- Cloud-native and serverless developments
+- FinOps and cloud cost management
+- Cloud migration and modernization trends
+
+FUNDING & M&A
+- Enterprise AI, Data, and Cloud funding rounds and acquisitions this week
+
+ENTERPRISE DECISION-MAKER PULSE
+Search specifically for what decision-makers are saying and reading:
+- LinkedIn posts and articles (search Google: site:linkedin.com "enterprise AI" OR "data platform" OR "cloud migration" this week)
+- Reddit discussions (search Google: site:reddit.com enterprise CTO OR VP engineering OR data platform)
+- Substack newsletters and articles (search Google: site:substack.com enterprise AI OR data OR cloud)
+- Analyst reports and thought leadership: Gartner, McKinsey & Company, Forrester, IDC, Deloitte Insights, BCG, Accenture
+- Focus on: what pain points are being expressed, what solutions are gaining traction, what conversations are shaping enterprise buyer sentiment
+
+Primary sources to check: TechCrunch, VentureBeat, The Robot Report, IEEE Spectrum, company blogs, press releases, Gartner, McKinsey, Forrester, IDC, Deloitte Insights, BCG, Accenture, LinkedIn (via Google), Reddit, Substack.
+
+Score all signals. Filter aggressively — only include what genuinely matters to Xavor.
 Produce the digest in the EXACT format specified. Be specific. No filler.
 """
 
-def midweek_prompt(date_range):
-    return f"""
-Run Sentinel's mid-week scan for {date_range}.
+# ── Claude call ───────────────────────────────────────────────────────────────
 
-Search only for HIGH signals (4+ on Xavor Relevance AND Market Impact):
-- Major launches from Salesforce, ServiceNow, Oracle, Aras, Propel
-- Funding rounds >$50M in Enterprise AI or Physical AI
-- Major partnerships in Xavor's ecosystem
+def run_claude(prompt, model=MODEL):
+    messages = [{"role": "user", "content": prompt}]
 
-If something qualifies, write a short alert (max 150 words) using this format:
-⚡ SENTINEL ALERT — [DATE]
-[Headline]. [Xavor angle in 1 sentence]. [Recommended action in 1 sentence].
-
-Then list any other qualifying signals in the standard bullet format.
-
-If nothing qualifies, respond with exactly: NO_ALERT
-"""
-
-# ── Gemini call ───────────────────────────────────────────────────────────────
-
-def run_gemini(prompt, model=PRIMARY_MODEL):
     for attempt in range(5):
         try:
-            response = client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=SOUL,
-                    tools=[types.Tool(google_search=types.GoogleSearch())],
-                    max_output_tokens=8192,
-                    temperature=0.3,
-                ),
-            )
-            return response.text.strip()
+            while True:
+                response = client.messages.create(
+                    model=model,
+                    max_tokens=16000,
+                    system=SOUL,
+                    tools=[{"type": "web_search_20250305", "name": "web_search"}],
+                    messages=messages,
+                )
+
+                text = "".join(b.text for b in response.content if b.type == "text")
+
+                if response.stop_reason == "end_turn":
+                    return text.strip()
+
+                if response.stop_reason == "tool_use":
+                    messages.append({"role": "assistant", "content": response.content})
+                    messages.append({
+                        "role": "user",
+                        "content": [
+                            {"type": "tool_result", "tool_use_id": b.id, "content": ""}
+                            for b in response.content if b.type == "tool_use"
+                        ],
+                    })
+                else:
+                    return text.strip()
+
         except Exception as e:
             if attempt < 4:
                 wait = 30 * (attempt + 1)
-                print(f"Request failed ({e}), retrying in {wait}s...")
+                print(f"Attempt {attempt + 1} failed ({e}), retrying in {wait}s...")
                 time.sleep(wait)
+                messages = [{"role": "user", "content": prompt}]
             else:
                 raise
+
+    return ""
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 
@@ -210,40 +261,23 @@ def send_email(subject, body):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Sentinel - Xavor Research Agent")
-    parser.add_argument(
-        "mode",
-        choices=["weekly", "midweek"],
-        help="Run mode: 'weekly' for Sunday digest, 'midweek' for Wednesday scan",
-    )
-    args = parser.parse_args()
-
     today      = datetime.now(timezone.utc)
     week_ago   = today - timedelta(days=7)
     date_range = f"{week_ago.strftime('%b %d')} - {today.strftime('%b %d, %Y')}"
 
-    if args.mode == "weekly":
-        print(f"Running weekly digest for {date_range}...")
-        digest = run_gemini(weekly_prompt(date_range))
-        print("Sending email...")
-        send_email(
-            subject=f"Sentinel x Xavor - Weekly Digest {date_range}",
-            body=digest,
-        )
-        print("Done.")
+    print(f"Running weekly digest for {date_range}...")
+    digest = run_claude(weekly_prompt(date_range))
 
-    elif args.mode == "midweek":
-        print(f"Running mid-week scan for {date_range}...")
-        result = run_gemini(midweek_prompt(date_range))
-        if result.strip() == "NO_ALERT":
-            print("No high-priority signals found. No email sent.")
-            sys.exit(0)
-        print("Sending alert email...")
-        send_email(
-            subject=f"Sentinel Alert - {date_range}",
-            body=result,
-        )
-        print("Alert sent.")
+    if not digest:
+        print("Empty response from Claude. Exiting.")
+        sys.exit(1)
+
+    print("Sending email...")
+    send_email(
+        subject=f"Sentinel x Xavor — Weekly Digest {date_range}",
+        body=digest,
+    )
+    print("Done.")
 
 if __name__ == "__main__":
     main()
