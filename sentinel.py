@@ -304,6 +304,14 @@ def main():
         subject=f"Sentinel x Xavor — Weekly Digest {date_range}",
         body=digest,
     )
+
+    # Persist the digest so the monthly Content Engine can pick it up.
+    os.makedirs("digests", exist_ok=True)
+    digest_path = f"digests/{today.strftime('%Y-%m-%d')}.md"
+    with open(digest_path, "w") as f:
+        f.write(f"SENTINEL x XAVOR — WEEKLY DIGEST [{date_range}]\n\n{digest}\n")
+    print(f"Digest saved to {digest_path}")
+
     print("Done.")
 
 if __name__ == "__main__":
