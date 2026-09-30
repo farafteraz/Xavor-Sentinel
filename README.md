@@ -21,9 +21,12 @@ covering both messages and execution.
   argument, reader, hook, structure, format, proof, CTA, and visible presentation.
   Unseen slides or videos remain unobserved. Patterns must cite examples, and
   performance cannot be inferred from follower or reaction counts.
+- Only individual posts with an accessible caption or media enter the competitive
+  post section. Websites, profiles, and press releases are separate context.
+  Missing search results do not establish a market gap or a first mover.
 - `competitive-watchlist.json` records the user-named peers Tkxel, Systems Limited,
   and Devsinc. Service-selling references are separately seeded from Razorleaf,
-  Coastal, INRY, and a Systems regional post. The actual post must explain or sell
+  PROSTEP, Coastal, INRY, and a Systems regional post. The actual post must explain or sell
   a service; company updates do not qualify automatically. Examples and access
   limits live in `competitive-reference-samples.json`. These are an initial
   reference set, not a representative feed audit or proven performance ranking.
@@ -45,7 +48,7 @@ For an explicitly requested live research preview:
 
 ```bash
 pip install anthropic
-python sentinel.py --no-email --as-of 2026-09-30 --output-dir work/preview
+python sentinel.py --no-email --since 2026-09-01 --as-of 2026-09-30 --output-dir work/preview
 ```
 
 This needs `ANTHROPIC_API_KEY` and makes paid research calls. It sends no email.
@@ -55,8 +58,17 @@ material must preserve its original publication date.
 
 The existing scheduled command still emails using the configured credentials.
 Changes on `research-inputs-v2` do not affect the schedule until merged to main.
-The validation workflow runs offline tests only. No new live research or email
-was sent while implementing this revision.
+The validation workflow runs offline tests only. The separate manual preview
+workflow runs research without email credentials and retains its prompt, trace,
+and report as an artifact. A completed preview is evidence that the call worked,
+not that every claim in the generated brief is fit for publication.
+
+The September 30 monthly previews exposed a remaining quality problem: the
+model sometimes promotes vendor assertions into general buyer claims and places
+company-page excerpts without individual post links inside the LinkedIn post
+section, even after the prompt forbids both. Keep this branch in preview until
+the research output is checked against primary sources and actual posts. The
+current preview is a lead collection, not approved October strategy input.
 
 ## Remaining evidence gaps
 
