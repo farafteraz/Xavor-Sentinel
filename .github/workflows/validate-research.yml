@@ -1,0 +1,18 @@
+name: Validate research inputs
+on:
+  push:
+    branches: [research-inputs-v2]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests -v
+      - name: Prepare research prompt without API or email
+        run: python sentinel.py --prepare-only --output-dir work/prepared

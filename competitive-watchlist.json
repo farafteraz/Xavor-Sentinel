@@ -1,0 +1,49 @@
+{
+  "status": "user_named_peers_with_researched_service_references",
+  "selection_note": "Track peers for positioning; select service-selling examples by the content itself. No company-wide quality ranking or proven performance claim.",
+  "peer_companies": [
+    {
+      "name": "Tkxel",
+      "role": "user_named_peer",
+      "source_example": "https://www.linkedin.com/feed/update/urn%3Ali%3Aactivity%3A7409110608631037952/",
+      "note": "Observed hiring post excluded from service-selling references."
+    },
+    {
+      "name": "Systems Limited",
+      "role": "user_named_peer",
+      "linkedin": "https://www.linkedin.com/company/systems-limited/"
+    },
+    {
+      "name": "Devsinc",
+      "role": "user_named_peer",
+      "note": "No suitable service-selling post verified in initial search; research required."
+    }
+  ],
+  "service_reference_companies": [
+    {
+      "name": "Razorleaf Ltd",
+      "role": "service_selling_reference",
+      "example_url": "https://www.linkedin.com/posts/razorleaf-ltd_plm-manufacturing-managedservices-activity-7501240195716075520-0wvU"
+    },
+    {
+      "name": "Coastal, via Erik Dunnigan",
+      "role": "service_selling_reference",
+      "example_url": "https://www.linkedin.com/posts/erik-dunnigan-41570685_salesforce-consulting-digitaltransformation-activity-7192226439423774720-BY3V"
+    },
+    {
+      "name": "INRY",
+      "role": "service_selling_reference",
+      "example_url": "https://www.linkedin.com/posts/inry_inry-servicenowelitepartner-legalservicedelivery-activity-7276281772995190786-_Rx-"
+    },
+    {
+      "name": "Systems Limited Middle East & Africa (Techvista)",
+      "role": "service_selling_reference",
+      "example_url": "https://www.linkedin.com/posts/systemslimitedmiddleeastandafrica_lead-with-purpose-transform-with-intelligence-activity-7326551830941913088-LY3w"
+    }
+  ],
+  "own_company": {
+    "name": "Xavor",
+    "linkedin": "https://www.linkedin.com/company/xavor/"
+  },
+  "sampling": "Use rolling 30-day context where accessible. Separate historical execution references from current trends. Filter recruitment, celebrations, awards, and event announcements unless they substantively explain a service. Service-selling includes useful expertise and project proof, not just hard CTAs."
+}

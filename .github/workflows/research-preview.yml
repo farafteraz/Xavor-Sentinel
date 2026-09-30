@@ -1,0 +1,41 @@
+name: Research preview without email
+on:
+  push:
+    branches: [research-inputs-v2]
+    paths: ['.github/workflows/research-preview.yml']
+  workflow_dispatch:
+    inputs:
+      since:
+        description: Research start date YYYY-MM-DD
+        required: true
+        default: '2026-09-01'
+      as_of:
+        description: Research end date YYYY-MM-DD
+        required: true
+        default: '2026-09-30'
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'anthropic>=0.49,<1'
+      - run: python -m unittest discover -s tests -v
+      - name: Research without email credentials
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RESEARCH_SINCE: ${{ inputs.since }}
+          RESEARCH_END: ${{ inputs.as_of }}
+        run: python -u sentinel.py --no-email --since "$RESEARCH_SINCE" --as-of "$RESEARCH_END" --output-dir work/preview
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sentinel-research-preview
+          path: work/preview/
+          if-no-files-found: ignore
