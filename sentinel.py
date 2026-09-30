@@ -67,48 +67,40 @@ def get_client():
 
 # ── Claude call ───────────────────────────────────────────────────────────────
 
-def run_claude(prompt, model=MODEL):
+def run_claude(prompt, model=MODEL, trace_path=None):
     client = get_client()
     messages = [{"role": "user", "content": prompt}]
-
-    for attempt in range(5):
-        try:
-            while True:
+    trace = []
+    for continuation in range(3):
+        for attempt in range(3):
+            try:
                 response = client.messages.create(
-                    model=model,
-                    max_tokens=16000,
-                    system=SOUL,
-                    tools=[{"type": "web_search_20250305", "name": "web_search"}],
+                    model=model, max_tokens=16000, system=SOUL,
+                    tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 20}],
                     messages=messages,
                 )
-
-                text = "".join(b.text for b in response.content if b.type == "text")
-
-                if response.stop_reason == "end_turn":
-                    return text.strip()
-
-                if response.stop_reason == "tool_use":
-                    messages.append({"role": "assistant", "content": response.content})
-                    messages.append({
-                        "role": "user",
-                        "content": [
-                            {"type": "tool_result", "tool_use_id": b.id, "content": ""}
-                            for b in response.content if b.type == "tool_use"
-                        ],
-                    })
-                else:
-                    return text.strip()
-
-        except Exception as e:
-            if attempt < 4:
-                wait = 30 * (attempt + 1)
-                print(f"Attempt {attempt + 1} failed ({e}), retrying in {wait}s...")
-                time.sleep(wait)
-                messages = [{"role": "user", "content": prompt}]
-            else:
-                raise
-
-    return ""
+                break
+            except Exception as exc:
+                status = getattr(exc, 'status_code', None)
+                if status not in (408, 429, 500, 502, 503, 504) or attempt == 2:
+                    raise
+                print(f'Transient provider error {status}; retrying', flush=True)
+                time.sleep(20 * (attempt + 1))
+        if trace_path:
+            trace.append(response.model_dump(mode='json'))
+            Path(trace_path).write_text(json.dumps(trace, indent=2))
+        print(f'Research response {continuation + 1}: {response.stop_reason}', flush=True)
+        if response.stop_reason == 'end_turn':
+            text = "".join(b.text for b in response.content if b.type == 'text').strip()
+            if not text:
+                raise RuntimeError('Research returned no text')
+            return text
+        if response.stop_reason == 'pause_turn':
+            # Server tools resume by returning their complete assistant content.
+            messages.append({"role": "assistant", "content": response.content})
+            continue
+        raise RuntimeError(f'Incomplete research response: {response.stop_reason}')
+    raise RuntimeError('Research continuation limit reached; partial response retained for inspection')
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 
@@ -145,10 +137,13 @@ def main():
     parser.add_argument('--no-email', action='store_true', help='Save research without sending email')
     parser.add_argument('--prepare-only', action='store_true', help='Save prompt without API calls or email')
     parser.add_argument('--as-of', help='Research end date YYYY-MM-DD; defaults to today UTC')
+    parser.add_argument('--since', help='Optional research start date YYYY-MM-DD')
     parser.add_argument('--output-dir', type=Path, default=ROOT / 'digests')
     args = parser.parse_args()
     today = datetime.strptime(args.as_of, '%Y-%m-%d').replace(tzinfo=timezone.utc) if args.as_of else datetime.now(timezone.utc)
-    week_ago   = today - timedelta(days=7)
+    week_ago = datetime.strptime(args.since, '%Y-%m-%d').replace(tzinfo=timezone.utc) if args.since else today - timedelta(days=7)
+    if week_ago > today:
+        parser.error('Research start must not follow the end date')
     date_range = f"{week_ago.strftime('%b %d')} - {today.strftime('%b %d, %Y')}"
 
     print(f"Running weekly digest for {date_range}...")
@@ -161,7 +156,9 @@ def main():
     digest_path = args.output_dir / f"{today.strftime('%Y-%m-%d')}.md"
     if digest_path.exists():
         raise FileExistsError('Digest already exists; use a separate output directory for a rerun')
-    digest = run_claude(prompt)
+    (args.output_dir / 'research-prompt.txt').write_text(SOUL + '\n\n' + prompt)
+    print('Researching sources; no email will be sent.' if args.no_email else 'Researching sources.', flush=True)
+    digest = run_claude(prompt, trace_path=args.output_dir / 'research-trace.json')
 
     if not digest:
         print("Empty response from Claude. Exiting.")

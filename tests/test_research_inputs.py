@@ -34,4 +34,21 @@ class ResearchInputsTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):sentinel.main()
             self.assertEqual(call.call_count,1)
 
+    def test_research_pause_and_truncation(self):
+        from types import SimpleNamespace as NS
+        responses=[NS(stop_reason='pause_turn',content=[NS(type='text',text='partial')]), NS(stop_reason='end_turn',content=[NS(type='text',text='Final research')])]
+        with patch.object(sentinel,'get_client') as client:
+            client.return_value.messages.create.side_effect=responses
+            self.assertEqual(sentinel.run_claude('research'),'Final research')
+            self.assertEqual(len(client.return_value.messages.create.call_args.kwargs['messages']),2)
+        with patch.object(sentinel,'get_client') as client:
+            client.return_value.messages.create.return_value=NS(stop_reason='max_tokens',content=[])
+            with self.assertRaisesRegex(RuntimeError,'Incomplete'):
+                sentinel.run_claude('research')
+
+    def test_monthly_preview_window(self):
+        with TemporaryDirectory() as tmp, patch('sys.argv',['sentinel.py','--prepare-only','--since','2026-09-01','--as-of','2026-09-30','--output-dir',tmp]):
+            sentinel.main()
+            self.assertIn('Sep 01 - Sep 30, 2026',(Path(tmp)/'research-prompt.txt').read_text())
+
 if __name__=='__main__':unittest.main()
