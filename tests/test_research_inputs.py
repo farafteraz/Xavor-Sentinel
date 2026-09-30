@@ -46,6 +46,17 @@ class ResearchInputsTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'Incomplete'):
                 sentinel.run_claude('research')
 
+    def test_research_output_omits_search_narration(self):
+        from types import SimpleNamespace as NS
+        response=NS(stop_reason='end_turn',content=[
+            NS(type='text',text='I am searching sources.'),
+            NS(type='server_tool_use'),
+            NS(type='text',text='Now the final brief.\n# Weekly Research Brief — September\nFinding')
+        ])
+        with patch.object(sentinel,'get_client') as client:
+            client.return_value.messages.create.return_value=response
+            self.assertEqual(sentinel.run_claude('research'),'# Weekly Research Brief — September\nFinding')
+
     def test_monthly_preview_window(self):
         with TemporaryDirectory() as tmp, patch('sys.argv',['sentinel.py','--prepare-only','--since','2026-09-01','--as-of','2026-09-30','--output-dir',tmp]):
             sentinel.main()

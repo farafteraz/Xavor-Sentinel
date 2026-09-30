@@ -91,7 +91,13 @@ def run_claude(prompt, model=MODEL, trace_path=None):
             Path(trace_path).write_text(json.dumps(trace, indent=2))
         print(f'Research response {continuation + 1}: {response.stop_reason}', flush=True)
         if response.stop_reason == 'end_turn':
-            text = "".join(b.text for b in response.content if b.type == 'text').strip()
+            # Server-side web search interleaves planning text with the final report.
+            # Keep the final structured brief, never the research narration.
+            text = "".join(b.text for b in response.content if b.type == 'text')
+            heading = text.find('# Weekly Research Brief')
+            if heading >= 0:
+                text = text[heading:]
+            text = text.strip()
             if not text:
                 raise RuntimeError('Research returned no text')
             return text

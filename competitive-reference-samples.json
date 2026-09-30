@@ -1,6 +1,6 @@
 {
   "observed_on": "2026-09-30",
-  "limits": "Search-indexed public text is an incomplete sample. Exact publication dates are unavailable. These examples do not establish current cadence, sector norms, content performance, or commercial outcomes. Visual execution was not inspected.",
+  "limits": "Public access is an incomplete sample. Exact publication dates are unavailable unless stated for a specific post. These examples do not establish current cadence, sector norms, content performance, or commercial outcomes. Visual execution is recorded only where directly inspected.",
   "records": [
     {
       "id": "reference-razorleaf-migration",
@@ -8,16 +8,31 @@
       "role": "service_selling_reference",
       "source_url": "https://www.linkedin.com/posts/razorleaf-ltd_plm-manufacturing-managedservices-activity-7501240195716075520-0wvU",
       "publication_date": "unknown",
-      "access": "search_indexed_post_text",
+      "access": "public_post_opened",
       "offer_refs": [
         "plm-migration"
       ],
       "statement": "The post argues that migration must preserve decision context as well as records, then explains how the firm scopes that work.",
       "hook": "A less obvious consequence of a familiar migration success criterion.",
       "proof": "Specific delivery approach; no independently verified result.",
-      "format": "Caption text observed; media design and slide/video structure not inspected.",
+      "format": "Caption and public post inspected directly on 2026-09-30; no media attachment visible in the main post.",
       "cta": "A question asking what context the reader would lose in a system change.",
       "interpretation": "Service expertise is demonstrated through a concrete failure mode and working method. Borrow the specificity, not the wording."
+    },
+    {
+      "id": "reference-prostep-plm-data-volume",
+      "company": "PROSTEP, Inc.",
+      "role": "service_selling_reference",
+      "source_url": "https://www.linkedin.com/posts/prostep-inc-_navigating-plm-migration-14-activity-7508840738718109696-IJGz",
+      "publication_date": "unknown",
+      "access": "public_post_and_cover_visual_opened",
+      "offer_refs": ["plm-migration"],
+      "statement": "The post frames data volume as a migration cost and schedule problem, then offers three strategies: filtering, splitting, and packaging.",
+      "hook": "A specific migration constraint rather than a general transformation claim.",
+      "proof": "Explained methods in a five-page document; no independently verified project result.",
+      "format": "Five-page LinkedIn document. Cover inspected: dark background, brightly colored data bars, large high-contrast headline. Interior slide text and design were not fully inspected.",
+      "cta": "Get the full guide via the comments; the comment link was not accessible without sign-in.",
+      "interpretation": "The caption leads with the buyer's data-volume constraint and uses the document to unpack methods. This is a format and argument reference, not evidence of content performance."
     },
     {
       "id": "reference-coastal-compass",
