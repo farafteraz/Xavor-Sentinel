@@ -1,5 +1,8 @@
 name: Research preview without email
 on:
+  push:
+    branches: [research-inputs-v2]
+    paths: ['.github/workflows/research-preview.yml']
   workflow_dispatch:
     inputs:
       since:
@@ -24,6 +27,7 @@ jobs:
       - run: pip install 'anthropic>=0.49,<1'
       - run: python -m unittest discover -s tests -v
       - name: Research without email credentials
+        if: github.event_name == 'workflow_dispatch'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RESEARCH_SINCE: ${{ inputs.since }}
